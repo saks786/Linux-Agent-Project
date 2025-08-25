@@ -27,8 +27,14 @@ pipeline {
         stage('Build & Deploy with Docker Compose') {
             steps {
                 sh '''
-                  docker-compose down || true
-                  docker-compose up -d --build
+                echo "🛑 Removing old postgres-db container if it exists..."
+            docker rm -f postgres-db || true
+
+            echo "⬇️ Shutting down old stack..."
+            docker-compose down || true
+
+            echo "🚀 Starting new containers..."
+            docker-compose up -d --build
                 '''
             }
         }
