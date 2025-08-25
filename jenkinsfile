@@ -23,8 +23,8 @@ pipeline {
     stage('Checkout') {
       steps {
         cleanWs()
-        git branch: params.BRANCH,
-            url: 'https://github.com/your-user/your-repo.git',
+        git branch: 'main',
+            url: https://github.com/saks786/Linux-Agent-Project.git,
             credentialsId: 'github-pat'
       }
     }
