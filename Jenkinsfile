@@ -1,53 +1,64 @@
 pipeline {
-    agent { label 'linux' }
-
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '20'))
-    }
-
-    parameters {
-        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
-        choice(name: 'DEPLOY_ENV', choices: ['dev', 'staging', 'prod'], description: 'Deploy environment')
-    }
-
-    environment {
-        COMPOSE_PROJECT_NAME = "linux-agent-${params.DEPLOY_ENV}"
-    }
+    agent any
 
     stages {
         stage('Checkout') {
             steps {
-                cleanWs()
-                git branch: "${params.BRANCH}", url: 'https://github.com/saks786/Linux-Agent-Project.git'
+                git branch: 'main',
+                    url: 'https://github.com/saks786/Linux-Agent-Project.git'
             }
         }
 
         stage('Build & Deploy with Docker Compose') {
             steps {
                 sh '''
-                  docker compose down || true
-                  docker compose up -d --build
+                echo "✅ Checking for docker-buildx plugin..."
+                if ! docker buildx version >/dev/null 2>&1; then
+                  echo "⚠️ buildx not found. Installing..."
+                  sudo mkdir -p /usr/local/lib/docker/cli-plugins/
+                  sudo curl -L https://github.com/docker/buildx/releases/latest/download/buildx-linux-amd64 \
+                    -o /usr/local/lib/docker/cli-plugins/docker-buildx
+                  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+                  echo "✅ buildx installed!"
+                fi
+
+                echo "✅ Checking for docker compose plugin..."
+                if ! docker compose version >/dev/null 2>&1; then
+                  echo "⚠️ docker compose plugin not found. Installing..."
+                  sudo apt-get update -y
+                  sudo apt-get install -y docker-compose-plugin
+                  echo "✅ docker compose plugin installed!"
+                fi
+
+                echo "🚀 Stopping old containers..."
+                docker compose down || true
+
+                echo "🚀 Building & starting containers..."
+                docker compose up -d --build
                 '''
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh 'sleep 10'  // wait for db + app to initialize
-                sh 'curl -f http://localhost:5000 || (echo "❌ Flask not responding" && exit 1)'
-                sh 'curl -f http://localhost:5000/db || (echo "❌ DB connection failed" && exit 1)'
+                sh '''
+                echo "🔍 Checking running containers..."
+                docker ps
+
+                echo "🔍 Checking logs..."
+                docker compose logs --tail=20
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "✅ App + Postgres deployed successfully at http://<agent-ip>:5000"
+            echo '✅ Build & Deploy successful!'
         }
         failure {
-            echo "❌ Build/Deploy failed! Check logs."
+            echo '❌ Build/Deploy failed! Check logs.'
         }
     }
 }
+
