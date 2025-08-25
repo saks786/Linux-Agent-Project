@@ -1,32 +1,23 @@
-
-
 services:
-  web:
-    build: .
-    container_name: linux-agent-app
-    ports:
-      - "5000:5000"
-    environment:
-      - POSTGRES_DB=mydb2
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
-    depends_on:
-      - db
-    restart: always
-
   db:
     image: postgres:15
-    container_name: postgres-db
     restart: always
     environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: mydb
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
     ports:
-      - "5433:5432"
+      - "5433:5432"   # Changed external port to avoid 5432 conflicts
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  web:
+    build: .
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
 volumes:
   db_data:
-  
+
