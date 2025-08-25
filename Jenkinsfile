@@ -41,10 +41,9 @@ pipeline {
 
         stage('Verify Deployment') {
             steps {
-                 echo "⏳ Waiting for Flask to start..."
-            sleep 10
-            curl -f http://localhost:8000 || { echo "❌ Flask not responding on port 8000"; exit 1; }
-            echo "✅ Flask app is up and running on port 8000!"
+                sh 'sleep 10'  // wait for db + app to initialize
+                sh 'curl -f http://localhost:5000 || (echo "❌ Flask not responding" && exit 1)'
+                sh 'curl -f http://localhost:5000/db || (echo "❌ DB connection failed" && exit 1)'
             }
         }
     }
@@ -58,4 +57,3 @@ pipeline {
         }
     }
 }
-
