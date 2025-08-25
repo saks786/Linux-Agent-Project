@@ -1,8 +1,14 @@
 FROM python:3.12-slim
+
 WORKDIR /app
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
-# Healthcheck & gunicorn example
-EXPOSE 8000
-CMD ["sh", "-c", "gunicorn app.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
+
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=5000
+
+CMD ["flask", "run"]
