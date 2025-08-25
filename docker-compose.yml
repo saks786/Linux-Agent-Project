@@ -1,34 +1,78 @@
 
 
 services:
-  web:
+  # ---------------- DEV ----------------
+  flask-app-dev:
     build: .
-    container_name: linux-agent-app
+    container_name: flask-app-dev
+    profiles: ["dev"]
     ports:
       - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=postgresql://user:password@postgres-dev:5432/devdb
+    depends_on:
+      - postgres-dev
+
+  postgres-dev:
+    image: postgres:15
+    container_name: postgres-dev
+    profiles: ["dev"]
+    restart: always
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5433:5432"
+
+  # ---------------- STAGE ----------------
+  flask-app-stage:
+    build: .
+    container_name: flask-app-stage
+    profiles: ["stage"]
+    ports:
       - "5001:5000"
+    environment:
+      - FLASK_ENV=staging
+      - DATABASE_URL=postgresql://user:password@postgres-stage:5432/stagedb
+    depends_on:
+      - postgres-stage
+
+  postgres-stage:
+    image: postgres:15
+    container_name: postgres-stage
+    profiles: ["stage"]
+    restart: always
+    environment:
+      - POSTGRES_DB=stagedb
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5434:5432"
+
+  # ---------------- PROD ----------------
+  flask-app-prod:
+    build: .
+    container_name: flask-app-prod
+    profiles: ["prod"]
+    ports:
       - "5002:5000"
     environment:
-      - POSTGRES_DB=mydb
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://user:password@postgres-prod:5432/proddb
     depends_on:
-      - db
-    restart: always
+      - postgres-prod
 
-  db:
+  postgres-prod:
     image: postgres:15
-    container_name: postgres-db2
+    container_name: postgres-prod
+    profiles: ["prod"]
     restart: always
     environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
+      - POSTGRES_DB=proddb
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
     ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
+      - "5435:5432"
 
-volumes:
-  db_data:
-  
