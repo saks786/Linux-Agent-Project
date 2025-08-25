@@ -25,7 +25,7 @@ pipeline {
         cleanWs()
         git branch: 'main',
             url: https://github.com/saks786/Linux-Agent-Project.git,
-            credentialsId: 'github-pat'
+        
       }
     }
 
