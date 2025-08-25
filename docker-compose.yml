@@ -1,23 +1,25 @@
+version: "3.9"
+
 services:
-  db:
+  postgres-db:
     image: postgres:15
-    restart: always
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: mydb
-    ports:
-      - "5433:5432"   # Changed external port to avoid 5432 conflicts
     volumes:
-      - db_data:/var/lib/postgresql/data
-
-  web:
-    build: .
-    depends_on:
-      - db
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "8000:8000"
+      - "5432:5432"
+
+  flask-app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres-db:5432/mydb
+    depends_on:
+      - postgres-db
 
 volumes:
-  db_data:
-
+  postgres_data:
