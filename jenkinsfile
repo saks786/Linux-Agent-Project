@@ -1,110 +1,53 @@
 pipeline {
-  agent { label 'linux' }  // or 'linux && docker' if you used that label
-  options {
-    timestamps()
-    ansiColor('xterm')
-    disableConcurrentBuilds()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-  }
-  parameters {
-    string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
-    choice(name: 'DEPLOY_ENV', choices: ['dev', 'staging', 'prod'], description: 'Deploy environment')
-    booleanParam(name: 'PUSH_IMAGE', defaultValue: false, description: 'Push image to registry')
-  }
-  environment {
-    COMPOSE_PROJECT_NAME = "myapp-${params.DEPLOY_ENV}"
-    IMAGE_NAME = "myuser/myapp"
-  }
-  triggers {
-    // Use one: Poll or GitHub webhook (recommended). Remove if you wire webhooks.
-    pollSCM('H/5 * * * *')
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        cleanWs()
-        git branch: 'main',
-            url: https://github.com/saks786/Linux-Agent-Project.git,
-        
-      }
+    agent { label 'linux' }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
     }
 
-    stage('Compute Tag') {
-      steps {
-        script {
-          env.GIT_SHORT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-          env.APP_TAG = "${params.DEPLOY_ENV}-${env.GIT_SHORT_SHA}"
-          echo "APP_TAG=${env.APP_TAG}"
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'staging', 'prod'], description: 'Deploy environment')
+    }
+
+    environment {
+        COMPOSE_PROJECT_NAME = "linux-agent-${params.DEPLOY_ENV}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                git branch: "${params.BRANCH}", url: 'https://github.com/saks786/Linux-Agent-Project.git'
+            }
         }
-      }
-    }
 
-    stage('Build Image') {
-      steps {
-        sh """
-          docker build -t ${IMAGE_NAME}:${APP_TAG} .
-        """
-      }
-    }
-
-    stage('Unit Tests (in container)') {
-      when { expression { fileExists('pytest.ini') || fileExists('tests') } }
-      steps {
-        sh """
-          docker run --rm ${IMAGE_NAME}:${APP_TAG} sh -lc 'pytest -q || exit 1'
-        """
-      }
-    }
-
-    stage('Push Image') {
-      when { expression { return params.PUSH_IMAGE } }
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh """
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker tag ${IMAGE_NAME}:${APP_TAG} ${IMAGE_NAME}:latest
-            docker push ${IMAGE_NAME}:${APP_TAG}
-            docker push ${IMAGE_NAME}:latest
-          """
+        stage('Build & Deploy with Docker Compose') {
+            steps {
+                sh '''
+                  docker compose down || true
+                  docker compose up -d --build
+                '''
+            }
         }
-      }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'sleep 10'  // wait for db + app to initialize
+                sh 'curl -f http://localhost:5000 || (echo "❌ Flask not responding" && exit 1)'
+                sh 'curl -f http://localhost:5000/db || (echo "❌ DB connection failed" && exit 1)'
+            }
+        }
     }
 
-    stage('Deploy (docker compose up)') {
-      steps {
-        // Make sure docker-compose.yml is in repo root.
-        // .env can be committed or created via credentials below.
-        sh """
-          export APP_TAG=${APP_TAG}
-          docker compose pull || true
-          docker compose down --remove-orphans || true
-          docker compose up -d --build
-          docker ps
-        """
-      }
+    post {
+        success {
+            echo "✅ App + Postgres deployed successfully at http://<agent-ip>:5000"
+        }
+        failure {
+            echo "❌ Build/Deploy failed! Check logs."
+        }
     }
-
-    stage('Health Check') {
-      steps {
-        sh """
-          # Adjust to your app's health endpoint/port
-          curl -fsS http://localhost:8000/ || (docker logs \$(docker ps -q --filter name=${env.COMPOSE_PROJECT_NAME}) ; exit 1)
-        """
-      }
-    }
-  }
-
-  post {
-    always {
-      archiveArtifacts artifacts: '**/*.log', allowEmptyArchive: true
-      junit testResults: 'reports/**/*.xml', allowEmptyResults: true
-    }
-    success {
-      echo "Deployed ${env.IMAGE_NAME}:${env.APP_TAG} to ${params.DEPLOY_ENV}"
-      // slackSend(channel: '#deployments', message: "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} deployed ${env.IMAGE_NAME}:${env.APP_TAG}")
-    }
-    failure {
-      // slackSend(channel: '#deployments', message: "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} failed")
-    }
-  }
 }
