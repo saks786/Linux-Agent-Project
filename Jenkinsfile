@@ -27,14 +27,15 @@ pipeline {
         stage('Build & Deploy with Docker Compose') {
             steps {
                 sh '''
-                echo "🛑 Removing old containers and networks..."
-            docker-compose down --remove-orphans || true
+                echo "🛑 Removing old postgres-db container if it exists..."
+            docker rm -f postgres-db || true
 
-            echo "🧹 Pruning unused networks..."
-            docker network prune -f || true
+            echo "⬇️ Shutting down old stack..."
+            docker-compose down || true
 
             echo "🚀 Starting new containers..."
             docker-compose up -d --build
+                '''
             }
         }
 
